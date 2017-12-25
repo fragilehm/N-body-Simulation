@@ -17,20 +17,28 @@ typedef struct _body {
 
 void integrate(body *planet, float deltaTime);
 void calculateNewtonGravityAcceleration(body *a, body *b, float *ax, float *ay);
-void simulateWithBruteforce(int nBodies, body *bodies);
+void simulateWithBruteforce(int nBodies, body *bodies, float dt);
 void initializeBodies (int nBodies, body *bodies);
 float randValue();
 
 int main(int argc, char **argv) {
-	float dt = atof(argv[1]);
-	int nBodies = atoi(argv[2]);
+	float dt = 0.01;
+	int nBodies = 100;
+	if (argc > 2) {
+		dt = atof(argv[1]);
+		nBodies = atoi(argv[2]);
+	}
+	printf("%d\n", argc);
 	body *bodies = (body*) malloc(nBodies * sizeof(*bodies));
 	initializeBodies(nBodies, bodies);
-	simulateWithBruteforce(nBodies, bodies);
+	simulateWithBruteforce(nBodies, bodies, dt);
 	return 0;
 }
 void integrate(body *body, float deltaTime) {
-
+	body->x += body->vx * deltaTime + (1 / 2) * body->ax * deltaTime * deltaTime;
+	body->y += body->vy * deltaTime + (1 / 2) * body->ay * deltaTime * deltaTime;
+	body->vx += body->ax * deltaTime;
+	body->vy += body->ay * deltaTime;
 }
 void calculateNewtonGravityAcceleration(body *a, body *b, float *ax, float *ay) {
 	float distanceX = fabsf(b->x - a->x);
@@ -42,8 +50,10 @@ void calculateNewtonGravityAcceleration(body *a, body *b, float *ax, float *ay) 
 	*ax = (distanceX * scale);
 	*ay = (distanceY * scale);
 }
-void simulateWithBruteforce(int nBodies, body *bodies) {
+void simulateWithBruteforce(int nBodies, body *bodies, float dt) {
+	double totalTime = 0.0; 
 	for(size_t i = 0; i < nBodies; i++) {
+		double start = clock();
 		float total_ax = 0, total_ay = 0;
 		for (size_t j = 0; j < nBodies; j++) {
 			if (i == j) {
@@ -51,14 +61,16 @@ void simulateWithBruteforce(int nBodies, body *bodies) {
 			}
 			float ax, ay;
 			calculateNewtonGravityAcceleration(&bodies[i], &bodies[j], &ax, &ay);
-			printf("%f, %f\n", ax, ay);
 			total_ax += ax;
 			total_ay += ay;
 		}
 		bodies[i].ax = total_ax;
 		bodies[i].ay = total_ay;
-		integrate(&bodies[i], 0.01);
+		integrate(&bodies[i], dt);
+		double timeElapsed = ((double) clock()  - start) / 1000;
+		totalTime += timeElapsed;
 	}
+	printf("%f\n", totalTime);
 }
 
 float randValue(){
