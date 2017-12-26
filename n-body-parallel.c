@@ -5,7 +5,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
-//#include <mpi.h>
+#include <mpi.h>
 #define PI 3.14159265358979323846
 
 typedef struct _body {
@@ -18,7 +18,7 @@ typedef struct _body {
 void integrate(body *planet, float deltaTime);
 void calculateNewtonGravityAcceleration(body *a, body *b, float *ax, float *ay);
 void simulateWithBruteforce(int nBodies, body *bodies, float dt);
-void initializeBodies (int nBodies, body *bodies);
+body  *initializeBodies (int nBodies);
 float randValue();
 
 int main(int argc, char **argv) {
@@ -28,10 +28,63 @@ int main(int argc, char **argv) {
 		dt = atof(argv[1]);
 		nBodies = atoi(argv[2]);
 	}
-	printf("%d\n", argc);
-	body *bodies = (body*) malloc(nBodies * sizeof(*bodies));
-	initializeBodies(nBodies, bodies);
-	simulateWithBruteforce(nBodies, bodies, dt);
+	double parallel_average_time = 0.0;
+    MPI_Init(&argc, &argv);
+    int world_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+
+	MPI_Datatype dt_body;
+  	MPI_Type_contiguous(7, MPI_FLOAT, &dt_body);
+  	MPI_Type_commit(&dt_body);
+    if (rank == 0) {
+        parallel_average_time -= MPI_Wtime();
+    }
+    size_t items_per_process = nBodies / world_size;
+    body *bodies = NULL;
+    bodies = initializeBodies(nBodies);
+    if (rank == 0) {
+        bodies = initializeBodies(nBodies);
+    }
+	body *local_bodies =
+        (body *) malloc(sizeof(*local_bodies) * items_per_process);
+
+
+    MPI_Scatter(
+        bodies,
+        items_per_process,
+        dt_body,
+        local_bodies,
+        items_per_process,
+        dt_body,
+        0,
+        MPI_COMM_WORLD
+    );
+	simulateWithBruteforce(items_per_process, local_bodies, dt);
+	MPI_Gather(
+        local_bodies,
+        items_per_process,
+        dt_body,
+        bodies,
+        items_per_process,
+        dt_body,
+        0,
+        MPI_COMM_WORLD
+    );
+	if (rank == 0) {
+        parallel_average_time += MPI_Wtime();
+        printf("Number of bodies: %.2d, time: %.2f\n", nBodies, parallel_average_time);
+        for (size_t i = 0; i < nBodies; ++i){
+        	printf("Body #: %d, accelerationX - %f, accelerationY - %f\n", (int)i, bodies[i].ax, bodies[i].ay);
+        }
+    }
+	if (bodies != NULL) {
+        free(bodies);
+    }
+    free(local_bodies);
+    MPI_Finalize();
 	return 0;
 }
 void integrate(body *body, float deltaTime) {
@@ -51,9 +104,7 @@ void calculateNewtonGravityAcceleration(body *a, body *b, float *ax, float *ay) 
 	*ay = (distanceY * scale);
 }
 void simulateWithBruteforce(int nBodies, body *bodies, float dt) {
-	double totalTime = 0.0; 
 	for(size_t i = 0; i < nBodies; i++) {
-		double start = clock();
 		float total_ax = 0, total_ay = 0;
 		for (size_t j = 0; j < nBodies; j++) {
 			if (i == j) {
@@ -67,18 +118,16 @@ void simulateWithBruteforce(int nBodies, body *bodies, float dt) {
 		bodies[i].ax = total_ax;
 		bodies[i].ay = total_ay;
 		integrate(&bodies[i], dt);
-		double timeElapsed = ((double) clock()  - start) / 1000;
-		totalTime += timeElapsed;
 	}
-	printf("%f\n", totalTime);
 }
 
 float randValue(){
 	return ((float) rand() / RAND_MAX);
 }
-void initializeBodies (int nBodies, body *bodies) {
+body  *initializeBodies (int nBodies) {
 	srand(time(NULL));
 	const float accelerationScale = 100.0;
+	body *bodies = (body *) malloc(sizeof(*bodies) * nBodies);
 	for (int i = 0; i < nBodies; i++) {
 		float angle = 	((float) i / nBodies) * 2.0 * PI + 
 						((randValue() - 0.5) * 0.5);
@@ -91,6 +140,7 @@ void initializeBodies (int nBodies, body *bodies) {
 		};
         bodies[i] = object;
     }
+    return bodies;
 }
 
 
