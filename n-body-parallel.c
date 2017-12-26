@@ -50,8 +50,6 @@ int main(int argc, char **argv) {
     }
 	body *local_bodies =
         (body *) malloc(sizeof(*local_bodies) * items_per_process);
-
-
     MPI_Scatter(
         bodies,
         items_per_process,

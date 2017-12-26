@@ -67,7 +67,7 @@ void simulateWithBruteforce(int nBodies, body *bodies, float dt) {
 		bodies[i].ax = total_ax;
 		bodies[i].ay = total_ay;
 		integrate(&bodies[i], dt);
-		double timeElapsed = ((double) clock()  - start) / 1000;
+		double timeElapsed = ((double) clock()  - start) / CLOCKS_PER_SEC;
 		totalTime += timeElapsed;
 	}
 	printf("%f\n", totalTime);
